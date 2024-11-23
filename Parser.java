@@ -6,78 +6,72 @@ public class Parser {
 	 * @see <a href="https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing">Algorithm</a>
 	 */
 	public static Node parse(String expression) throws Error {
-		Lexer lexer = new Lexer(expression);
-		Node root = parseBinary(lexer, 0);
-		if (lexer.hasNext()) {
-			throw new Error("Invalid expression", lexer.next(), lexer);
-		}
-		return root;
+		return parse(new Lexer(expression));
 	}
 
-	private static Node parseUnary(Lexer lexer) throws Error {
-		Lexer.Token token = lexer.next();
-		switch (token) {
-			case RParen:
-			case RBracket:
-			case Undefined:
-				// stop parsing
-				lexer.back();
-				return null;
-
-			case Fun:
-				Node fun = new Node(token, lexer);
-				fun.right = parseBinary(lexer, 0);
-				skipToken(lexer, Lexer.Token.RParen);
-				return fun;
-
-			case Idx:
-				Node idx = new Node(token, lexer);
-				idx.right = parseBinary(lexer, 0);
-				skipToken(lexer, Lexer.Token.RBracket);
-				return idx;
-
-			case Value:
-				return new Node(token, lexer);
-		}
-
-		if (!token.isUnaryOperator()) {
-			if (token.unary == null) {
-				throw new Error("Unary operator expected, got", token, lexer);
-			}
-			token = token.unary;
-		}
-
-		Node node = new Node(token, lexer);
-		node.right = parseUnary(lexer);
-		if (node.right == null) {
-			throw new Error("Incomplete unary operator", node);
+	public static Node parse(Lexer lexer) throws Error {
+		Node node = parseBinary(lexer, 0);
+		if (lexer.hasNext()) {
+			throw new Error("End of input expected, got", lexer.nextToken(), lexer);
 		}
 		return node;
 	}
 
-	public static Node parseBinary(Lexer lexer, int minPrecedence) throws Error {
-		Node root = parseUnary(lexer);
-		if (root == null) {
-			return null;
+	private static Node parseUnary(Lexer lexer) throws Error {
+		Lexer.Token token = lexer.nextToken();
+		switch (token) {
+			case Value:
+				return new Node(token, lexer.getPosition(), lexer.getText());
+
+			case Fun:
+				int position = lexer.getPosition();
+				if (lexer.nextToken() == Lexer.Token.RParen) {
+					// allow empty list arguments: '(' ')'
+					return new Node(token, position, token.text);
+				}
+
+				lexer.backToken();
+				Node fun = new Node(token, position, token.text);
+				fun.right = parseBinary(lexer, 0);
+				if (lexer.nextToken() != Lexer.Token.RParen) {
+					throw new Error("Right parenthesis expected, got", token, lexer);
+				}
+				return fun;
+
+			case Idx:
+				Node idx = new Node(token, lexer.getPosition(), token.text);
+				idx.right = parseBinary(lexer, 0);
+				if (lexer.nextToken() != Lexer.Token.RBracket) {
+					throw new Error("Right bracket expected, got", token, lexer);
+				}
+				return idx;
 		}
 
+		if (token.getUnary() == null) {
+			throw new Error("Unary operator expected", token, lexer);
+		}
+
+		Node node = new Node(token.getUnary(), lexer.getPosition(), token.text);
+		node.right = parseUnary(lexer);
+		return node;
+	}
+
+	private static Node parseBinary(Lexer lexer, int minPrecedence) throws Error {
+		Node root = parseUnary(lexer);
 		while (lexer.hasNext()) {
-			Lexer.Token token = lexer.next();
+			Lexer.Token token = lexer.nextToken();
 			switch (token) {
 				case RParen:
 				case RBracket:
 				case Undefined:
 					// stop parsing
-					lexer.back();
+					lexer.backToken();
 					return root;
 
 				case Fun:
 				case Idx:
-					lexer.back();
+					lexer.backToken();
 					Node node = parseUnary(lexer);
-					if (node == null) {
-						throw new Error("Invalid expression", token, lexer);
-					}
 					node.left = root;
 					root = node;
 					continue;
@@ -87,40 +81,30 @@ public class Parser {
 				throw new Error("Binary operator expected, got", token, lexer);
 			}
 
-			if (root.token.precedence <= token.precedence && root.isOperator()) {
-				if (root.token.precedence < token.precedence || token.right2Left) {
+			if (token.precedence >= root.token.precedence && root.token.isUnaryOperator()) {
+				if (token.precedence > root.token.precedence || token.right2left) {
 					throw new Error("Precedence error, consider using parenthesis", token, lexer);
 				}
 			}
 
 			if (token.precedence <= minPrecedence) {
 				if (token.precedence < minPrecedence) {
-					lexer.back();
+					lexer.backToken();
 					break;
 				}
-				if (!token.right2Left) {
-					lexer.back();
+				if (!token.right2left) {
+					lexer.backToken();
 					break;
 				}
 			}
 
-			Node node = new Node(token, lexer);
+			Node node = new Node(token, lexer.getPosition(), token.text);
 			node.right = parseBinary(lexer, token.precedence);
-			if (node.right == null) {
-				throw new Error("Incomplete binary operator", node);
-			}
 			node.left = root;
 			root = node;
 		}
 
 		return root;
-	}
-
-	private static void skipToken(Lexer lexer, Lexer.Token kind) throws Error {
-		Lexer.Token token = lexer.next();
-		if (kind != token) {
-			throw new Error("Unexpected token", token, lexer);
-		}
 	}
 
 	/**
@@ -130,7 +114,7 @@ public class Parser {
 		/**
 		 * Kind of the node.
 		 */
-		private final Lexer.Token token;
+		protected final Lexer.Token token;
 
 		/**
 		 * Position of token in the input.
@@ -153,10 +137,10 @@ public class Parser {
 		 */
 		protected Node right = null;
 
-		protected Node(Lexer.Token token, Lexer lexer) {
+		protected Node(Lexer.Token token, int position, String text) {
 			this.token = token;
-			this.text = lexer.getText();
-			this.position = lexer.getPosition();
+			this.position = position;
+			this.text = text;
 		}
 
 		public Lexer.Token getToken() {
@@ -177,22 +161,6 @@ public class Parser {
 
 		public Node getRight() {
 			return right;
-		}
-
-		/**
-		 * Check whether the node is an operator.
-		 * @return true if the node is operator.
-		 */
-		public boolean isOperator() {
-			return token.isOperator();
-		}
-
-		/**
-		 * Check whether the node is a unary operator.
-		 * @return true if the node is unary operator.
-		 */
-		public boolean isUnaryOperator() {
-			return token.isUnaryOperator();
 		}
 
 		@Override

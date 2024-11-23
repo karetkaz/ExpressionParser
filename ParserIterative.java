@@ -16,10 +16,11 @@ public class ParserIterative {
 		boolean unary = true;
 
 		Lexer.Token previousToken = null;
-		for (Lexer.Token token : lexer) {
-			if (unary && token.unary != null) {
+		while (lexer.hasNext()) {
+			Lexer.Token token = lexer.nextToken();
+			if (unary && token.getUnary() != null) {
 				// switch to unary token in unary mode to use correct precedence
-				token = token.unary;
+				token = token.getUnary();
 			}
 
 			int precedence = parens.size() * Lexer.Token.Fun.precedence + token.precedence;
@@ -73,8 +74,11 @@ public class ParserIterative {
 					break;
 			}
 
-			if (!token.isOperator() || unary != token.isUnaryOperator()) {
-				throw new Error("Unexpected token", token, lexer);
+			if (!token.isBinaryOperator() && !token.isUnaryOperator()) {
+				throw new Error("Operator expected", token, lexer);
+			}
+			if (unary != token.isUnaryOperator()) {
+				throw new Error((unary ? "Unary" : "Binary") + " operator expected", token, lexer);
 			}
 
 			while (!operators.isEmpty() && operators.peek().precedes(precedence)) {
@@ -129,8 +133,24 @@ public class ParserIterative {
 		public final int precedence;
 
 		public Node(Lexer.Token token, int precedence, Lexer lexer) {
-			super(token, lexer);
+			super(token, lexer.getPosition(), lexer.getText());
 			this.precedence = precedence;
+		}
+
+		/**
+		 * Check whether the node is an operator.
+		 * @return true if the node is operator.
+		 */
+		public boolean isOperator() {
+			return token.isUnaryOperator() || token.isBinaryOperator();
+		}
+
+		/**
+		 * Check whether the node is a unary operator.
+		 * @return true if the node is unary operator.
+		 */
+		public boolean isUnaryOperator() {
+			return token.isUnaryOperator();
 		}
 
 		/**
@@ -139,7 +159,7 @@ public class ParserIterative {
 		 * @return true if the precedence level is greater.
 		 */
 		public boolean precedes(int level) {
-			if (this.getToken().right2Left) {
+			if (this.token.right2left) {
 				return this.precedence > level;
 			}
 			return this.precedence >= level;
