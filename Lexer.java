@@ -1,8 +1,6 @@
-import java.util.Iterator;
-
-public class Lexer implements Iterable<Lexer.Token>, Iterator<Lexer.Token> {
+public class Lexer {
 	// contains the separator characters of tokens
-	private final boolean[] separators;
+	private final boolean[] delimiters;
 
 	// contains the input string.
 	private final String input;
@@ -12,30 +10,100 @@ public class Lexer implements Iterable<Lexer.Token>, Iterator<Lexer.Token> {
 	private int start = 0;
 	private int end = 0;
 
+	private static final Token[] TOKEN_VALUES = Token.values();
+
 	public Lexer(String input) {
+		if (input == null) {
+			throw new IllegalArgumentException("Input cannot be null");
+		}
 		this.input = input;
-		this.separators = new boolean[256];
+		this.delimiters = new boolean[256];
 
 		// use whitespace and operator's first character as separator
-		for (int i = 0; i < separators.length; ++i) {
-			if (isWhitespace((char) i)) {
-				separators[i] = true;
-			}
+		for (int i = 0; i < delimiters.length; i++) {
+			delimiters[i] = isWhitespace((char) i);
 		}
+
 		for (Token token : Token.values()) {
-			if (token.text == null || token.text.isEmpty()) {
-				continue;
+			if (token.text != null && !token.text.isEmpty()) {
+				delimiters[token.text.charAt(0)] = true;
 			}
-			separators[token.text.charAt(0)] = true;
 		}
 	}
 
 	/**
-	 * Get the text of the current token.
-	 * @return text of the current token.
+	 * Check if the input contains unprocessed tokens.
+	 * @return true if not all tokens consumed.
 	 */
-	public String getText() {
-		return input.substring(start, end);
+	public boolean hasNext() {
+		return end < input.length();
+	}
+
+	/**
+	 * Scan for the next token in the input.
+	 * @return next token from the input.
+	 */
+	public Token nextToken() {
+		// skip white spaces
+		while (end < input.length()) {
+			if (!isWhitespace(input.charAt(end))) {
+				break;
+			}
+			end++;
+		}
+
+		// next token starts where previous token ended.
+		previous = start;
+		start = end;
+
+		// find next operator
+		while (end < input.length()) {
+			if (isDelimiter(input.charAt(end))) {
+				break;
+			}
+			end++;
+		}
+
+		if (start < end) {
+			return Token.Value;
+		}
+
+		Token match = null;
+		for (Token token : TOKEN_VALUES) {
+			if (token.text == null || !input.startsWith(token.text, start)) {
+				// skip if token does not start with kind's text
+				continue;
+			}
+			if (match == null || match.text.length() < token.text.length()) {
+				// use the longest match available
+				match = token;
+			}
+			if (match == token.getUnary() && match.text.equals(token.text)) {
+				// use the binary version
+				match = token;
+			}
+		}
+
+		if (match != null) {
+			end += match.text.length();
+			return match;
+		}
+
+		// separator, but not an operator
+		end += 1;
+		return Token.Undefined;
+	}
+
+	/**
+	 * Rollback the last read token
+	 */
+	public void backToken() throws Error {
+		if (previous < 0) {
+			throw new Error("can not push back: ", Token.Undefined, this);
+		}
+		end = start;
+		start = previous;
+		previous = -1;
 	}
 
 	/**
@@ -47,108 +115,19 @@ public class Lexer implements Iterable<Lexer.Token>, Iterator<Lexer.Token> {
 	}
 
 	/**
-	 * Lexer is iterable, so return the class as iterator.
-	 * @return iterator.
+	 * Get the text of the current token.
+	 * @return text of the current token.
 	 */
-	@Override
-	public Iterator<Token> iterator() {
-		return this;
-	}
-
-	/**
-	 * Check if the input contains unprocessed tokens.
-	 * @return true if not all tokens consumed.
-	 */
-	@Override
-	public boolean hasNext() {
-		return end < input.length();
-	}
-
-	/**
-	 * Scan for the next token in the input.
-	 * @return next token from the input.
-	 */
-	@Override
-	public Token next() {
-		int inputEnd = input.length();
-
-		// skip white spaces
-		while (end < inputEnd) {
-			char chr = input.charAt(end);
-			if (!isWhitespace(chr)) {
-				break;
-			}
-			end += 1;
-		}
-
-		// next token starts where previous token ended.
-		previous = start;
-		start = end;
-
-		// find next operator
-		while (end < inputEnd) {
-			char chr = input.charAt(end);
-			if (isSeparator(chr)) {
-				break;
-			}
-			end += 1;
-		}
-
-		if (start < end) {
-			return Token.Value;
-		}
-
-		Token match = null;
-		for (Token token : Token.values()) {
-			if (token.text == null || !input.startsWith(token.text, end)) {
-				// skip if token does not start with kind's text
-				continue;
-			}
-			if (match == null || match.text.length() < token.text.length()) {
-				// use the longest match available
-				match = token;
-			}
-			if (match == token.unary) {
-				// use the binary version
-				match = token;
-			}
-		}
-
-		if (match == null) {
-			// separator, but not an operator
-			if (end < inputEnd) {
-				end += 1;
-			}
-			return Token.Undefined;
-		}
-
-		end += match.text.length();
-		return match;
-	}
-
-	/**
-	 * Rollback the last read token
-	 */
-	public void back() {
-		if (previous < 0) {
-			throw new UnsupportedOperationException("Only one rollback is possible");
-		}
-		end = start;
-		start = previous;
-		previous = -1;
-	}
-
-	@Override
-	public void remove() {
-		throw new UnsupportedOperationException();
+	public String getText() {
+		return input.substring(start, end);
 	}
 
 	private static boolean isWhitespace(char chr) {
 		return Character.isWhitespace(chr);
 	}
 
-	private boolean isSeparator(char chr) {
-		return chr < separators.length && separators[chr];
+	private boolean isDelimiter(char chr) {
+		return chr < delimiters.length && delimiters[chr];
 	}
 
 	@Override
@@ -172,12 +151,12 @@ public class Lexer implements Iterable<Lexer.Token>, Iterator<Lexer.Token> {
 		Div(13, false, "/"),
 		Rem(13, false, "%"),
 
-		Add(12, false, Pos.text, Pos),
-		Sub(12, false, Neg.text, Neg),
+		Add(12, false, "+"),
+		Sub(12, false, "-"),
 
 		Shl(11, false, "<<"),
-		Shr(11, false, ">>"),
-		Sar(11, false, ">>>"),
+		Shr(11, false, ">>>"),
+		Sar(11, false, ">>"),
 
 		Lt(10, false, "<"),
 		Leq(10, false, "<="),
@@ -193,29 +172,28 @@ public class Lexer implements Iterable<Lexer.Token>, Iterator<Lexer.Token> {
 
 		All(5, false, "&&"),
 		Any(4, false, "||"),
+
 		Chk(3, true, "?"),
 		Sel(3, true, ":"),
 
-		Coma(1, true, ","),
+		Set(2, true, "="),
+		SetAdd(2, true, "+="),
+		SetSub(2, true, "-="),
+		SetMul(2, true, "*="),
+		SetDiv(2, true, "/="),
+		SetRem(2, true, "%="),
 
-		Value(null),
-		RParen(")"),
-		RBracket("]"),
-		Undefined(null);
+		Coma(1, false, ","),
 
-		Token(String text) {
-			this(0, false, text, null);
-		}
+		Value(0, false, null),
+		RParen(0, false, ")"),
+		RBracket(0, false, "]"),
+		Undefined(0, false, null);
 
-		Token(int precedence, boolean right2Left, String text) {
-			this(precedence, right2Left, text, null);
-		}
-
-		Token(int precedence, boolean right2Left, String text, Token unary) {
+		Token(int precedence, boolean right2left, String text) {
 			this.precedence = precedence;
-			this.right2Left = right2Left;
+			this.right2left = right2left;
 			this.text = text;
-			this.unary = unary;
 		}
 
 		/**
@@ -230,43 +208,48 @@ public class Lexer implements Iterable<Lexer.Token>, Iterator<Lexer.Token> {
 		 * ex: 1 + 2 + 3 => ((1 + 2) + 3)
 		 * but: a = b = c => (a = (b = c))
 		 */
-		public final boolean right2Left;
+		public final boolean right2left;
 
 		/**
 		 * Text representation of the token.
 		 */
 		public final String text;
 
-		/**
-		 * Link tokens with similar text
-		 * minus(-) is both binary(subtract) and unary(negate)
-		 */
-		public final Token unary;
-
-		public boolean isOperator() {
+		public Token getUnary() {
+			// allow some operators to behave as unary, the left branch will be null
 			switch (this) {
+				case Neg: // -9
+				case Pos: // +9
+				case Cmt: // ~9
+				case Not: // !9
+					return this;
+
+				case Add: // +9
+					return Pos;
+
+				case Sub: // -9
+					return Neg;
+			}
+			return null;
+		}
+
+		public boolean isUnaryOperator() {
+			return this == getUnary();
+		}
+
+		public boolean isBinaryOperator() {
+			// disallow some tokens to be used as (binary) operators
+			switch (this) {
+				case Neg:
+				case Pos:
+				case Cmt:
+				case Not:
 				case Value:
 				case RParen:
-				case RBracket:
 				case Undefined:
 					return false;
 			}
 			return true;
-		}
-
-		public boolean isUnaryOperator() {
-			switch (this) {
-				case Pos:
-				case Neg:
-				case Cmt:
-				case Not:
-					return true;
-			}
-			return false;
-		}
-
-		public boolean isBinaryOperator() {
-			return isOperator() && !isUnaryOperator();
 		}
 	}
 }

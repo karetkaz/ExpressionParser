@@ -54,13 +54,16 @@ public interface Visitor {
 		Visitor.visit(root, new Visitor() {
 
 			private void group(Parser.Node node, char chr) {
-				if (!node.isOperator()) {
+				if (node == root) {
+					return;
+				}
+				if (node.left == null && node.right == null) {
 					if (groupValues) {
 						out.append(chr);
 					}
 					return;
 				}
-				if (node.getToken() == Lexer.Token.Coma) {
+				if (node.token == Lexer.Token.Coma) {
 					if (groupArgs) {
 						out.append(chr);
 					}
@@ -71,7 +74,7 @@ public interface Visitor {
 
 			@Override
 			public void pre(Parser.Node node) {
-				switch (node.getToken()) {
+				switch (node.token) {
 					case Idx: // array [ subscript ]
 					case Fun: // function ( arguments )
 						// postpone after lhs was printed
@@ -82,12 +85,12 @@ public interface Visitor {
 
 			@Override
 			public void post(Parser.Node node) {
-				group(node, node.getToken() == Lexer.Token.Idx ? ']' : ')');
+				group(node, node.token == Lexer.Token.Idx ? ']' : ')');
 			}
 
 			@Override
 			public void visit(Parser.Node node) {
-				switch (node.getToken()) {
+				switch (node.token) {
 					case Idx:
 						// array [ subscript ]
 						group(node, '[');
@@ -104,12 +107,13 @@ public interface Visitor {
 						return;
 				}
 
-				if (!node.isOperator()) {
+				if (node.left == null && node.right == null) {
+					// not an operator, no operands
 					out.append(node.getText());
 					return;
 				}
 
-				if (node.isUnaryOperator()) {
+				if (node.left == null) {
 					// no spacing before and after unary operators: ---4
 					out.append(node.getText());
 					return;

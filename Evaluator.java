@@ -6,26 +6,12 @@ public abstract class Evaluator {
 	protected static final double[] EMPTY_ARGS = {};
 
 	/**
-	 * Invoked on nodes parsed as function call operator(`function(...arguments)`).
+	 * Invoked on every value node for lookup or to be parsed.
 	 *
-	 * @param function  the name of the function.
-	 * @param arguments arguments of the invocation.
-	 * @return value of the expression.
+	 * @param value the variable or number represented as text.
+	 * @return value to be used for this token.
 	 */
-	public abstract double onFunction(String function, double[] arguments) throws Error;
-
-	/**
-	 * Convenience method to evaluate constructs where the argument might be an array,
-	 * like: `sum(values)`.
-	 *
-	 * @param function  the name of the function.
-	 * @param argument arguments of the invocation.
-	 * @return value of the expression.
-	 */
-	public double onFunction(String function, String argument) throws Error {
-		double[] args = {onValue(argument)};
-		return onFunction(function, args);
-	}
+	protected abstract double onValue(String value) throws Error;
 
 	/**
 	 * Invoked on nodes parsed as index operator(`array[subscript]`).
@@ -34,37 +20,74 @@ public abstract class Evaluator {
 	 * @param subscript the subscript to be used.
 	 * @return value of the expression.
 	 */
-	public abstract double onIndex(String array, int subscript) throws Error;
+	protected abstract double onArray(String array, int subscript) throws Error;
+
+	/**
+	 * Invoked on nodes parsed as function call operator(`function(...arguments)`).
+	 *
+	 * @param function  the name of the function.
+	 * @param arguments arguments of the invocation.
+	 * @return value of the expression.
+	 */
+	protected abstract double onFunction(String function, double[] arguments) throws Error;
 
 	/**
 	 * Convenience method to evaluate constructs where the subscript might be an identifier,
 	 * like: `Math[pi]`.
 	 *
-	 * @param object   the array which is indexed.
-	 * @param property the subscript to be used.
+	 * @param array   the array which is indexed.
+	 * @param subscript the subscript to be used.
 	 * @return value of the expression.
 	 */
-	public double onIndex(String object, String property) throws Error {
-		double value = onValue(property);
+	protected double onArray(String array, Parser.Node subscript) throws Error {
+		double value = evaluate(subscript);
 		int index = (int) value;
 		if (value != index) {
-			throw new Error("Index expects integer value, got: " + value);
+			throw new Error("Invalid integer subscript", subscript);
 		}
-		return onIndex(object, index);
+		return onArray(array, index);
 	}
 
 	/**
-	 * Invoked on every value node for lookup or to be parsed.
+	 * Convenience method to evaluate constructs where the argument might be an array,
+	 * like: `sum(values)`.
 	 *
-	 * @param value the variable or number represented as text.
-	 * @return value to be used for this token.
+	 * @param function  the name of the function.
+	 * @param arguments arguments of the invocation.
+	 * @return value of the expression.
 	 */
-	public double onValue(String value) throws Error {
-		try {
-			return Double.parseDouble(value);
-		} catch (NumberFormatException e) {
-			throw new Error("Invalid value or number: `" + value + "`", e);
+	protected double onFunction(String function, Parser.Node arguments) throws Error {
+		if (arguments == null) {
+			return onFunction(function, EMPTY_ARGS);
 		}
+
+		int n = 1;
+		for (Parser.Node node = arguments; node.token == Lexer.Token.Coma; n += 1) {
+			if (Lexer.Token.Coma.right2left) {
+				node = node.right;
+			} else {
+				node = node.left;
+			}
+		}
+
+		double[] args = new double[n];
+		evaluateArguments(args, 0, arguments);
+		return onFunction(function, args);
+	}
+
+	private int evaluateArguments(double[] args, int pos, Parser.Node arguments) throws Error {
+		if (arguments.token != Lexer.Token.Coma) {
+			args[pos] = evaluate(arguments);
+			return pos;
+		}
+		if (Lexer.Token.Coma.right2left) {
+			evaluateArguments(args, pos + 1, arguments.right);
+			args[pos] = evaluate(arguments.left);
+		} else {
+			pos = evaluateArguments(args, pos, arguments.left) + 1;
+			args[pos] = evaluate(arguments.right);
+		}
+		return pos;
 	}
 
 	/**
@@ -75,222 +98,195 @@ public abstract class Evaluator {
 	 */
 	public double evaluate(Parser.Node node) throws Error {
 		double left, right;
-		switch (node.getToken()) {
+		switch (node.token) {
 			case Value:
-				return onValue(node.getText());
-
-			case Idx:
-				if (node.getLeft() == null || node.getRight() == null) {
-					// empty index: `[]` or `values[]` or `[values]`
-					throw new Error("Invalid operation", node);
+				try {
+					return onValue(node.getText());
+				} catch (Error e) {
+					throw e;
+				} catch (Exception e) {
+					throw new Error("Invalid value", node, e);
 				}
-				if (node.getLeft().getToken() != Lexer.Token.Value) {
-					// invalid array variable: `(9-8)[9]`
-					throw new Error("Invalid array operation", node);
-				}
-				if (node.getRight().getToken() == Lexer.Token.Value) {
-					return onIndex(node.getLeft().getText(), node.getRight().getText());
-				}
-
-				double value = evaluate(node.getRight());
-				int index = (int) value;
-				if (value != index) {
-					throw new Error("Index expects integer value, got: " + value);
-				}
-				return onIndex(node.getLeft().getText(), index);
 
 			case Fun:
-				if (node.getLeft() == null) {
-					if (node.getRight() == null) {
-						// empty parenthesis: '()'
-						throw new Error("Invalid function call", node);
-					}
-
-					// parenthesis: '(3 + 5)'
-					return evaluate(node.getRight());
+				if (node.left == null && node.right == null) {
+					// empty parenthesis: `()`
+					throw new Error("Invalid function call", node);
 				}
-
-				if (node.getRight() == null) {
-					// no arguments: `sum()`
-					return onFunction(node.getLeft().getText(), EMPTY_ARGS);
+				if (node.left == null) {
+					// (3 + 2)
+					return evaluate(node.right);
 				}
-
-				if (node.getRight().getToken() == Lexer.Token.Value) {
-					// single text argument: `sum(array)`
-					return onFunction(node.getLeft().getText(), node.getRight().getText());
+				if (node.left.token != Lexer.Token.Value) {
+					// invalid function name: `3-9()`
+					throw new Error("Invalid function call", node);
 				}
+				return onFunction(node.left.getText(), node.right);
 
-				int argc = 1;
-				for (Parser.Node arg = node.getRight(); arg.getToken() == Lexer.Token.Coma; arg = arg.getRight()) {
-					// count how many arguments we have
-					argc += 1;
+			case Idx:
+				if (node.left == null || node.right == null) {
+					// empty index: `[]` or `values[]` or `[values]`
+					throw new Error("Invalid array subscript", node);
 				}
-
-				double[] args = new double[argc];
-				Parser.Node arg = node.getRight();
-				for (argc = 0; arg.getToken() == Lexer.Token.Coma; arg = arg.getRight()) {
-					args[argc] = evaluate(arg.getLeft());
-					argc += 1;
+				if (node.left.token != Lexer.Token.Value) {
+					// invalid array variable: `(9-8)[9]`
+					throw new Error("Invalid array subscript", node);
 				}
-				args[argc] = evaluate(arg);
-
-				return onFunction(node.getLeft().getText(), args);
+				return onArray(node.left.getText(), node.right);
 
 			case Pos:
-				right = evaluate(node.getRight());
+				right = evaluate(node.right);
 				return +right;
 
 			case Neg:
-				right = evaluate(node.getRight());
+				right = evaluate(node.right);
 				return -right;
 
 			case Cmt:
-				right = evaluate(node.getRight());
+				right = evaluate(node.right);
 				if (right != (long) right) {
 					throw new Error("Invalid integer operation", node);
 				}
 				return ~(long) right;
 
 			case Not:
-				right = evaluate(node.getRight());
+				right = evaluate(node.right);
 				return right == 0 ? 1 : 0;
 
 			case Pow:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return Math.pow(left, right);
 
 			case Mul:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left * right;
 
 			case Div:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left / right;
 
 			case Rem:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left % right;
 
 			case Add:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left + right;
 
 			case Sub:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left - right;
 
 			case Shl:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				if (left != (long) left || right != (long) right) {
 					throw new Error("Invalid integer operation", node);
 				}
 				return (long) left << (long) right;
 
 			case Shr:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
-				if (left != (long) left || right != (long) right) {
-					throw new Error("Invalid integer operation", node);
-				}
-				return (long) left >> (long) right;
-
-			case Sar:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				if (left != (long) left || right != (long) right) {
 					throw new Error("Invalid integer operation", node);
 				}
 				return (long) left >>> (long) right;
 
+			case Sar:
+				left = evaluate(node.left);
+				right = evaluate(node.right);
+				if (left != (long) left || right != (long) right) {
+					throw new Error("Invalid integer operation", node);
+				}
+				return (long) left >> (long) right;
 
 			case Lt:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left < right ? 1 : 0;
 
 			case Leq:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left <= right ? 1 : 0;
 
 			case Gt:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left > right ? 1 : 0;
 
 			case Geq:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left >= right ? 1 : 0;
 
 			case Eq:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left == right ? 1 : 0;
 
 			case Neq:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				return left != right ? 1 : 0;
 
 			case And:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				if (left != (long) left || right != (long) right) {
 					throw new Error("Invalid integer operation", node);
 				}
 				return (long) left & (long) right;
 
 			case Xor:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				if (left != (long) left || right != (long) right) {
 					throw new Error("Invalid integer operation", node);
 				}
 				return (long) left ^ (long) right;
 
 			case Ior:
-				left = evaluate(node.getLeft());
-				right = evaluate(node.getRight());
+				left = evaluate(node.left);
+				right = evaluate(node.right);
 				if (left != (long) left || right != (long) right) {
 					throw new Error("Invalid integer operation", node);
 				}
 				return (long) left | (long) right;
 
 			case All:
-				left = evaluate(node.getLeft());
-				// stop on first zero value
+				left = evaluate(node.left);
 				if (left == 0) {
+					// stop at the first zero value
 					return left;
 				}
-				return evaluate(node.getRight());
+				return evaluate(node.right);
 
 			case Any:
-				left = evaluate(node.getLeft());
-				// stop on first non-zero value
+				left = evaluate(node.left);
 				if (left != 0) {
+					// stop at the first non-zero value
 					return left;
 				}
-				return evaluate(node.getRight());
+				return evaluate(node.right);
 
 			case Chk:
-				if (node.getRight() == null || node.getRight().getToken() != Lexer.Token.Sel) {
+				if (node.right == null || node.right.token != Lexer.Token.Sel) {
 					throw new Error("Invalid operation", node);
 				}
-				if (evaluate(node.getLeft()) != 0) {
-					return evaluate(node.getRight().getLeft());
+				if (evaluate(node.left) != 0) {
+					return evaluate(node.right.left);
 				}
-				return evaluate(node.getRight().getRight());
+				return evaluate(node.right.right);
 
-			default:
-				throw new Error("Invalid operation", node);
 		}
+		throw new Error("Invalid operation", node);
 	}
 }
