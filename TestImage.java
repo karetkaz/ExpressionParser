@@ -1,101 +1,12 @@
 import java.io.FileWriter;
 import java.util.concurrent.TimeUnit;
 
-class TestImage extends TestExpr.EvaluatorMath {
-	private final double[] vars;
-
-	public TestImage() {
-		this.vars = new double[128];
-		for (int i = '0'; i <= '9'; i++) {
-			vars[i] = i - '0';
-		}
-	}
-
-	public int var(Parser.Node node) throws Error {
-		if (node.getToken() != Lexer.Token.Value) {
-			throw new Error("set can only modify variables", node);
-		}
-		if (node.getText().length() != 1) {
-			throw new Error("variables can be single characters", node);
-		}
-		char chr = node.getText().charAt(0);
-		if (chr >= '0' && chr <= '9') {
-			throw new Error("variables can not be numbers", node);
-		}
-		return chr;
-	}
-
-	@Override
-	public double onValue(String value) throws Error {
-		if (value.length() == 1) {
-			return vars[value.charAt(0)];
-		}
-		return super.onValue(value);
-	}
-
-	@Override
-	protected double onFunction(String function, double[] arguments) throws Error {
-		switch (function) {
-			case "mix": {
-				if (arguments.length != 3) {
-					throw new Error("Linear interpolation requires three arguments");
-				}
-				// Returns the linear interpolation between two values
-				double min = arguments[0];
-				double max = arguments[1];
-				double t = arguments[2];
-				return min + t * (max - min);
-			}
-			case "smoothstep": {
-				if (arguments.length != 3) {
-					throw new Error("Hermite interpolation requires three arguments");
-				}
-				// Returns the Hermite interpolation between two values
-				double min = arguments[0];
-				double max = arguments[1];
-				double t = (arguments[2] - min) / (max - min);
-				if (t < 0) {
-					return 0;
-				}
-				if (t > 1) {
-					return 1;
-				}
-				return t * t * (3 - 2 * t);
-			}
-		}
-		return super.onFunction(function, arguments);
-	}
-
-	@Override
-	public double evaluate(Parser.Node node) throws Error {
-		switch (node.getToken()) {
-			case Set:
-				return vars[var(node.getLeft())] = evaluate(node.getRight());
-			case SetAdd:
-				return vars[var(node.getLeft())] += evaluate(node.getRight());
-			case SetSub:
-				return vars[var(node.getLeft())] -= evaluate(node.getRight());
-			case SetMul:
-				return vars[var(node.getLeft())] *= evaluate(node.getRight());
-			case SetDiv:
-				return vars[var(node.getLeft())] /= evaluate(node.getRight());
-			case SetRem:
-				return vars[var(node.getLeft())] %= evaluate(node.getRight());
-
-			case Coma:
-				// enable chain of expressions, returning the value of the last one
-				evaluate(node.getLeft());
-				return evaluate(node.getRight());
-		}
-
-		return super.evaluate(node);
-	}
+class TestImage extends Evaluator {
 
 	public static void main(String[] args) throws Exception {
 		int width = 1024 / 2;
 		int height = width;
 
-		String equationHearth = "x *= 1.5, y *= -1.5, (x * x + y * y -1) ** 3 - x ** 2 * y ** 3 < 0";
 		String equationYinYang = "h = x * x + y * y, h > 1 || (" +
 				"d = abs(y) - h," +
 				"a = d - 0.23," +
@@ -111,14 +22,14 @@ class TestImage extends TestExpr.EvaluatorMath {
 
 		TestImage evaluator = new TestImage();
 
-		// evaluate first time (probably bytecode will be executed, no jit yet)
+		// evaluate first time (bytecode will be executed, no jit yet)
 		long eval0Time = System.nanoTime();
 		evaluator.vars['x'] = 0;
 		evaluator.vars['y'] = 0;
 		evaluator.evaluate(root);
 		eval0Time = System.nanoTime() - eval0Time;
 
-		// write the value of each evaluation to file
+		// write the value of each evaluation to the file
 		long execTime = System.nanoTime();
 		try (FileWriter img = new FileWriter("test.ppm")) {
 			img.append("P2\n")
@@ -155,5 +66,101 @@ class TestImage extends TestExpr.EvaluatorMath {
 		System.out.println("eval0Time.millis: " + eval0Time / unit);
 		System.out.println("eval1Time.millis: " + eval1Time / unit);
 		System.out.println("execTime.millis: " + execTime / unit);
+	}
+
+	private final double[] vars;
+
+	public TestImage() {
+		this.vars = new double[128];
+		for (int i = '0'; i <= '9'; i++) {
+			vars[i] = i - '0';
+		}
+	}
+
+	public int var(Parser.Node node) throws Error {
+		if (node.getToken() != Lexer.Token.Value) {
+			throw new Error("set can only modify variables", node);
+		}
+		if (node.getText().length() != 1) {
+			throw new Error("variables can be single characters", node);
+		}
+		char chr = node.getText().charAt(0);
+		if (chr >= '0' && chr <= '9') {
+			throw new Error("variables can not be numbers", node);
+		}
+		return chr;
+	}
+
+	@Override
+	public double onValue(String value) {
+		if (value.length() == 1) {
+			return vars[value.charAt(0)];
+		}
+		return Double.parseDouble(value);
+	}
+
+	@Override
+	protected double onArray(String array, int subscript) throws Error {
+		throw new Error("Arrays are not supported");
+	}
+
+	@Override
+	protected double onFunction(String function, double[] arguments) throws Error {
+		switch (function) {
+			case "abs":
+				require(arguments.length == 1, "abs requires one argument");
+				return Math.abs(arguments[0]);
+
+			case "sign":
+				require(arguments.length == 1, "sign requires one argument");
+				return Math.signum(arguments[0]);
+
+			case "mix": {
+				require(arguments.length == 3, "Linear interpolation requires three arguments");
+				double min = arguments[0];
+				double max = arguments[1];
+				double t = arguments[2];
+				return min + t * (max - min);
+			}
+			case "smoothstep": {
+				require(arguments.length == 3, "Hermite interpolation requires three arguments");
+				double min = arguments[0];
+				double max = arguments[1];
+				double t = (arguments[2] - min) / (max - min);
+				if (t < 0) {
+					return 0;
+				}
+				if (t > 1) {
+					return 1;
+				}
+				return t * t * (3 - 2 * t);
+			}
+		}
+		throw new Error("Invalid function: " + function);
+	}
+
+	@Override
+	public double evaluate(Parser.Node node) throws Error {
+		switch (node.getToken()) {
+			case Set:
+				return vars[var(node.getLeft())] = evaluate(node.getRight());
+			case SetAdd:
+				return vars[var(node.getLeft())] += evaluate(node.getRight());
+			case SetSub:
+				return vars[var(node.getLeft())] -= evaluate(node.getRight());
+			case SetMul:
+				return vars[var(node.getLeft())] *= evaluate(node.getRight());
+			case SetDiv:
+				return vars[var(node.getLeft())] /= evaluate(node.getRight());
+			case SetRem:
+				return vars[var(node.getLeft())] %= evaluate(node.getRight());
+
+			case Coma:
+				// enable chain of expressions, returning the value of the last one
+				evaluate(node.getLeft());
+				return evaluate(node.getRight());
+		}
+
+		return super.evaluate(node);
 	}
 }

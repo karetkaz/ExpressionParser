@@ -8,7 +8,7 @@ public class TestExpr {
 	private static final double w = Math.random() * -100;
 	private static final double[] vec = {x, y, z, w};
 
-	public static void main(String[] args) throws Error {
+	public static void main(String[] args) throws Exception {
 		testValues();
 		testBitwise();
 		testArithmetic();
@@ -29,35 +29,34 @@ public class TestExpr {
 		assertEquals(x < y ? y - x * w : w * x - y, "x < y ? y - x * w : w * x - y", epsilon, false, "x y < y x w * - ?");
 		assertEquals(x, "(x)", epsilon, false, "x");
 
-		assertError("3x", "Invalid value: `3x`, position: 0, token: Value");
-		assertError("3.1415.3", "Invalid value: `3.1415.3`, position: 0, token: Value");
-		assertError("(0 : 50) ? x : y", "Invalid operation: `:`, position: 3, token: Sel");
-		assertError("(0 ? 50) ? x : y", "Invalid operation: `?`, position: 3, token: Chk");
-		assertError("~3.14", "Invalid integer operation: `~`, position: 0, token: Cmt");
-		assertError("3.14 & 1", "Invalid integer operation: `&`, position: 5, token: And");
+		assertError("3x", "Invalid value: Token.Value(`3x`), at position: 0");
+		assertError("3.1415.3", "Invalid value: Token.Value(`3.1415.3`), at position: 0");
+		assertError("(0 : 50) ? x : y", "Invalid operation: Token.Sel(`:`), at position: 3");
+		assertError("(0 ? 50) ? x : y", "Invalid operation: Token.Chk(`?`), at position: 3");
+		assertError("~3.14", "Invalid integer operation: Token.Cmt(`~`), at position: 0");
+		assertError("3.14 & 1", "Invalid integer operation: Token.And(`&`), at position: 5");
 		assertError("min()", "At least one argument expected");
-		assertError("pow()", "Two argument expected");
-		assertError("pow(1, 2, 3)", "Two argument expected");
+		assertError("pow()", "Two arguments expected");
+		assertError("pow(1, 2, 3)", "Two arguments expected");
 		assertError("3()", "Invalid function: 3");
 		assertError("3[0]", "Invalid subscript: 3[0]");
 		assertError("w(0)", "Invalid function: w");
 		assertError("w[0]", "Invalid subscript: w[0]");
-		assertError("-3()", "Invalid function call: `(`, position: 2, token: Fun");
-		assertError("-3[0]", "Invalid array subscript: `[`, position: 2, token: Idx");
-		assertError("(-3)()", "Invalid function call: `(`, position: 4, token: Fun");
-		assertError("(-3)[0]", "Invalid array subscript: `[`, position: 4, token: Idx");
-		assertError("vec[0]()", "Invalid function call: `(`, position: 6, token: Fun");
+		assertError("-3()", "Invalid function call: Token.Fun(`(`), at position: 2");
+		assertError("-3[0]", "Invalid array subscript: Token.Idx(`[`), at position: 2");
+		assertError("(-3)()", "Invalid function call: Token.Fun(`(`), at position: 4");
+		assertError("(-3)[0]", "Invalid array subscript: Token.Idx(`[`), at position: 4");
+		assertError("vec[0]()", "Invalid function call: Token.Fun(`(`), at position: 6");
 		assertError("x(x())", "Invalid function: x");
-		assertError("x[x[]]", "Unary operator expected: `]`, position: 4, token: RBracket");
+		assertError("x[x[]]", "Unary operator expected: Token.RBracket(`]`), at position: 4");
 		assertError("vec()", "Invalid function: vec");
-		assertError("vec[]", "Unary operator expected: `]`, position: 4, token: RBracket");
-		assertError("[x]", "Invalid array subscript: `[`, position: 0, token: Idx");
-		assertError("(vec)", "Invalid value: `vec`, position: 1, token: Value");
-		assertError("[vec]", "Invalid array subscript: `[`, position: 0, token: Idx");
-		assertError("()", "Invalid function call: `(`, position: 0, token: Fun");
-		assertError("[]", "Unary operator expected: `]`, position: 1, token: RBracket");
-		assertError("(([([])]))", "Unary operator expected: `]`, position: 5, token: RBracket");
-		assertError("(([([])]))", "Unary operator expected: `]`, position: 5, token: RBracket");
+		assertError("vec[]", "Unary operator expected: Token.RBracket(`]`), at position: 4");
+		assertError("[x]", "Invalid array subscript: Token.Idx(`[`), at position: 0");
+		assertError("(vec)", "Invalid value: Token.Value(`vec`), at position: 1");
+		assertError("[vec]", "Invalid array subscript: Token.Idx(`[`), at position: 0");
+		assertError("()", "Invalid function call: Token.Fun(`(`), at position: 0");
+		assertError("[]", "Unary operator expected: Token.RBracket(`]`), at position: 1");
+		assertError("(([([])]))", "Unary operator expected: Token.RBracket(`]`), at position: 5");
 	}
 
 	public static void testValues() throws Error {
@@ -149,7 +148,7 @@ public class TestExpr {
 		assertEquals(6, "1 + 2 + 3", epsilon, true, "(1 2 +) 3 +");
 
 
-		// '*' has higher precedence than '+'
+		// '*' has a higher precedence than '+'
 		assertEquals(7, "1 + 2 * 3", epsilon, true, "1 (2 3 *) +");
 		assertEquals(5, "1 * 2 + 3", epsilon, true, "(1 2 *) 3 +");
 
@@ -174,13 +173,13 @@ public class TestExpr {
 		assertEquals(1, "1 < 2 && 2 < 3 && 3 < 4", epsilon, false, "1 2 < 2 3 < && 3 4 < &&");
 		assertEquals(1, "1 < 2 || 2 < 3 || 3 < 4", epsilon, false, "1 2 < || ||");
 
-		// test short-circuiting && stops on first zero value
+		// test short-circuiting && stops on the first zero value
 		assertEquals(3, "1 && 2 && 3", epsilon, false, "1 2 && 3 &&");
 		assertEquals(0, "1 && 2 && 0", epsilon, false, "1 2 && 0 &&");
 		assertEquals(0, "1 && 0 && 3", epsilon, false, "1 0 && &&");
 		assertEquals(0, "0 && 2 && 3", epsilon, false, "0 && &&");
 
-		// test short-circuiting || stops on first non-zero value
+		// test short-circuiting || stops on the first non-zero value
 		assertEquals(1, "1 || 2 || 3", epsilon, false, "1 || ||");
 		assertEquals(1, "1 || 2 || 0", epsilon, false, "1 || ||");
 		assertEquals(1, "1 || 0 || 3", epsilon, false, "1 || ||");
@@ -191,6 +190,12 @@ public class TestExpr {
 	}
 
 	public static void testPrimary() throws Error {
+		assertEquals(0, "!nan", epsilon, false, "nan !"); // todo: js: !NaN === true
+		assertEquals(0, "!inf", epsilon, false, "inf !");
+		assertEquals(0, "!pi", epsilon, false, "pi !");
+		assertEquals(1, "!+0", epsilon, false, "0 + !");
+		assertEquals(1, "!-0", epsilon, false, "0 - !");
+
 		assertEquals(4, "(4)", epsilon, false, "4");
 		assertEquals(2, "(4 / 2)", epsilon, false, "4 2 /");
 		assertEquals(0, "abs(0)", epsilon, false, "0 abs(#1)");
@@ -219,7 +224,7 @@ public class TestExpr {
 		assertEquals(y, "vec[y]", epsilon, false, "y vec[]");
 		assertEquals(z, "vec[z]", epsilon, false, "z vec[]");
 		assertEquals(w, "vec[w]", epsilon, false, "w vec[]");
-		assertError("vec[a]", "Invalid value: `a`, position: 4, token: Value");
+		assertError("vec[a]", "Invalid value: Token.Value(`a`), at position: 4");
 
 		assertEquals(w, "min(vec[0], vec[1], vec[2], vec[3])", epsilon, false, "0 vec[] 1 vec[] 2 vec[] 3 vec[] min(#4)");
 		assertEquals(x, "min(vec[0], vec[1], vec[2])", epsilon, false, "0 vec[] 1 vec[] 2 vec[] min(#3)");
@@ -250,9 +255,9 @@ public class TestExpr {
 		assertEquals(4, "2 ** 2", epsilon, false, "2 2 **");
 		assertEquals(.25, "2 ** -2", epsilon, false, "2 2 - **");
 
-		assertError("-2 ** 2", "Precedence error, consider using parenthesis: `**`, position: 3, token: Pow");
+		assertError("-2 ** 2", "Precedence error, consider using parenthesis around: Token.Pow(`**`), at position: 3");
 		assertEquals(-4, "-(2 ** 2)", epsilon, false, "2 2 ** -");
-		assertError("-2 ** -2", "Precedence error, consider using parenthesis: `**`, position: 3, token: Pow");
+		assertError("-2 ** -2", "Precedence error, consider using parenthesis around: Token.Pow(`**`), at position: 3");
 		assertEquals(-.25, "-(2 ** -2)", epsilon, false, "2 2 - ** -");
 		assertEquals(1, "ln(e)", epsilon, false, "e ln(#1)");
 		assertEquals(1, "log(e)", epsilon, false, "e log(#1)");
@@ -416,10 +421,7 @@ public class TestExpr {
 		if (!compare(root, ParserIterative.parse(new Lexer(expression)))) {
 			throw new Error("Expected same tree for recursive and iterative parsing");
 		}
-		System.out.println("`" + expression + "` := " + value
-				+ "\n\tparanthesis: " + Visitor.format(root, true, false)
-				+ "\n\tevaluation: " + evaluation
-		);
+		System.out.println(value + " == expr: `" + expression + "`, eval: `" + evaluation + "`");
 	}
 
 	private static boolean compare(Parser.Node a, Parser.Node b) throws Error {
@@ -449,10 +451,17 @@ public class TestExpr {
 	}
 
 	static class EvaluatorMath extends Evaluator {
+		protected static final double nan = Double.NaN;
+		protected static final double inf = Double.POSITIVE_INFINITY;
+		protected static final double pi = Math.PI;
+		protected static final double e = Math.E;
 
 		@Override
 		protected double onValue(String value) throws Error {
 			switch (value) {
+				case "nan":
+					return nan;
+
 				case "inf":
 					return inf;
 
@@ -474,138 +483,156 @@ public class TestExpr {
 		protected double onFunction(String function, double[] arguments) throws Error {
 			switch (function) {
 				case "min":
+					require(arguments.length >= 1, "At least one argument expected");
 					return min(arguments);
 
 				case "max":
+					require(arguments.length >= 1, "At least one argument expected");
 					return max(arguments);
 
 				case "avg":
 					return avg(arguments);
 
 				case "abs":
-					return Math.abs(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return Math.abs(arguments[0]);
 
 				case "sign":
-					return Math.signum(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return Math.signum(arguments[0]);
 
 				case "floor":
-					return Math.floor(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return Math.floor(arguments[0]);
 
 				case "ceil":
-					return Math.ceil(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return Math.ceil(arguments[0]);
 
 				case "round":
-					return Math.rint(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return Math.rint(arguments[0]);
 
 				///// power and logarithms
 				case "exp":
-					return exp(single(arguments));
-
-				case "ln":
-					return ln(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return exp(arguments[0]);
 
 				case "log":
 					if (arguments.length == 2) {
 						return log(arguments[0], arguments[1]);
 					}
-					return ln(single(arguments));
+				case "ln":
+					require(arguments.length == 1, "Single argument expected");
+					return ln(arguments[0]);
 
 				case "sqrt":
-					return sqrt(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return sqrt(arguments[0]);
 
 				case "pow":
-					if (arguments.length != 2) {
-						throw new Error("Two argument expected");
-					}
+					require(arguments.length == 2, "Two arguments expected");
 					return pow(arguments[0], arguments[1]);
 
 				///// trigonometric functions
 				case "sin":
-					return sin(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return sin(arguments[0]);
 
 				case "cos":
-					return cos(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return cos(arguments[0]);
 
 				case "tan":
-					return tan(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return tan(arguments[0]);
 
 				case "sinh":
-					return sinh(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return sinh(arguments[0]);
 
 				case "cosh":
-					return cosh(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return cosh(arguments[0]);
 
 				case "tanh":
-					return tanh(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return tanh(arguments[0]);
 
 				case "asin":
-					return asin(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return asin(arguments[0]);
 
 				case "acos":
-					return acos(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return acos(arguments[0]);
 
 				case "atan":
-					return atan(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return atan(arguments[0]);
 
 				//* todo: untested
 				case "asinh":
-					return asinh(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return asinh(arguments[0]);
 
 				case "acosh":
-					return acosh(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return acosh(arguments[0]);
 
 				case "atanh":
-					return atanh(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return atanh(arguments[0]);
 
 				case "sec":
-					return sec(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return sec(arguments[0]);
 
 				case "csc":
-					return csc(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return csc(arguments[0]);
 
 				case "cot":
-					return cot(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return cot(arguments[0]);
 
 				case "sech":
-					return sech(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return sech(arguments[0]);
 
 				case "csch":
-					return csch(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return csch(arguments[0]);
 
 				case "coth":
-					return coth(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return coth(arguments[0]);
 
 				case "asec":
-					return asec(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return asec(arguments[0]);
 
 				case "acsc":
-					return acsc(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return acsc(arguments[0]);
 
 				case "acot":
-					return acot(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return acot(arguments[0]);
 
 				case "asech":
-					return asech(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return asech(arguments[0]);
 
 				case "acsch":
-					return acsch(single(arguments));
+					require(arguments.length == 1, "Single argument expected");
+					return acsch(arguments[0]);
 
 				case "acoth":
-					return acoth(single(arguments));
-				// */
+					require(arguments.length == 1, "Single argument expected");
+					return acoth(arguments[0]);
 			}
 			throw new Error("Invalid function: " + function);
-		}
-
-		protected static final double inf = Double.POSITIVE_INFINITY;
-		protected static final double pi = Math.PI;
-		protected static final double e = Math.E;
-
-		protected static double single(double[] arguments) throws Error {
-			if (arguments.length != 1) {
-				throw new Error("Single argument expected");
-			}
-			return arguments[0];
 		}
 
 		// power and logarithm
@@ -648,9 +675,9 @@ public class TestExpr {
 		protected static double acoth(double x) { return x == 1 ? inf : x == -1 ? -inf : .5 * ln((x + 1) / (x - 1)); }
 
 		// statistical functions on arrays
-		protected static double min(double... arguments) throws Error {
+		protected static double min(double... arguments) {
 			if (arguments.length < 1) {
-				throw new Error("At least one argument expected");
+				return Double.NEGATIVE_INFINITY;
 			}
 			double value = arguments[0];
 			for (int i = 1; i < arguments.length; ++i) {
@@ -660,9 +687,9 @@ public class TestExpr {
 			}
 			return value;
 		}
-		protected static double max(double... arguments) throws Error {
+		protected static double max(double... arguments) {
 			if (arguments.length < 1) {
-				throw new Error("At least one argument expected");
+				return Double.POSITIVE_INFINITY;
 			}
 			double value = arguments[0];
 			for (int i = 1; i < arguments.length; ++i) {
@@ -673,10 +700,11 @@ public class TestExpr {
 			return value;
 		}
 		protected static double avg(double... arguments) {
-			double value = 0;
 			if (arguments.length < 1) {
 				return 0;
 			}
+
+			double value = 0;
 			for (double arg : arguments) {
 				value += arg;
 			}

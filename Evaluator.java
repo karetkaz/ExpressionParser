@@ -1,5 +1,8 @@
 /**
- * Evaluator for an abstract syntax tree.
+ * The Evaluator class is an abstract class designed for evaluating
+ * mathematical or logical expressions represented by an abstract syntax tree.
+ * The class provides methods to evaluate various types of expressions, and it
+ * encapsulates specific behaviors for handling values, functions calls, and array operations.
  */
 public abstract class Evaluator {
 
@@ -91,7 +94,7 @@ public abstract class Evaluator {
 	}
 
 	/**
-	 * Evaluate the expression starting with the given node as root.
+	 * Evaluate the expression starting with the given node as the root.
 	 *
 	 * @param node      root of the syntax tree.
 	 * @return value of the expression.
@@ -109,16 +112,17 @@ public abstract class Evaluator {
 				}
 
 			case Fun:
-				if (node.left == null && node.right == null) {
-					// empty parenthesis: `()`
-					throw new Error("Invalid function call", node);
-				}
 				if (node.left == null) {
-					// (3 + 2)
+					if (node.right == null) {
+						// empty parenthesis: `()`
+						throw new Error("Invalid function call", node);
+					}
+
+					// subexpression with parenthesis: `(3 + 2)`
 					return evaluate(node.right);
 				}
 				if (node.left.token != Lexer.Token.Value) {
-					// invalid function name: `3-9()`
+					// invalid function name: `9()`
 					throw new Error("Invalid function call", node);
 				}
 				return onFunction(node.left.getText(), node.right);
@@ -288,5 +292,9 @@ public abstract class Evaluator {
 
 		}
 		throw new Error("Invalid operation", node);
+	}
+
+	public static void require(boolean condition, String message) throws Error {
+		if (!condition) throw new Error(message);
 	}
 }
