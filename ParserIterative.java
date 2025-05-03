@@ -138,7 +138,7 @@ public class ParserIterative {
 		}
 
 		/**
-		 * Check if this node has higher precedence level than the given one.
+		 * Check if this node has a higher precedence level than the given one.
 		 * @param level precedence level to check with.
 		 * @return true if the precedence level is greater.
 		 */

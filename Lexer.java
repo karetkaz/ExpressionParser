@@ -1,4 +1,12 @@
+/**
+ * Lexer class provides functionality to tokenize an input string based on predefined token rules.
+ * The Lexer identifies tokens, their type, and their positions within the input.
+ * It uses a set of delimiters and token definitions to parse the input efficiently.
+ */
 public class Lexer {
+	// Cache token values to avoid creating new arrays each time {@code Token.values()} is called.
+	private static final Token[] TOKEN_VALUES = Token.values();
+
 	// contains the separator characters of tokens
 	private final boolean[] delimiters;
 
@@ -6,11 +14,9 @@ public class Lexer {
 	private final String input;
 
 	// slice of the current token.
-	private int previous = -1;
+	private int previous = 0;
 	private int start = 0;
 	private int end = 0;
-
-	private static final Token[] TOKEN_VALUES = Token.values();
 
 	public Lexer(String input) {
 		if (input == null) {
@@ -21,11 +27,11 @@ public class Lexer {
 
 		// use whitespace and operator's first character as separator
 		for (int i = 0; i < delimiters.length; i++) {
-			delimiters[i] = isWhitespace((char) i);
+			delimiters[i] = Character.isWhitespace((char) i);
 		}
 
-		for (Token token : Token.values()) {
-			if (token.text != null && !token.text.isEmpty()) {
+		for (Token token : TOKEN_VALUES) {
+			if (!token.text.isEmpty()) {
 				delimiters[token.text.charAt(0)] = true;
 			}
 		}
@@ -40,13 +46,13 @@ public class Lexer {
 	}
 
 	/**
-	 * Scan for the next token in the input.
+	 * Scan and read the next token from the input.
 	 * @return next token from the input.
 	 */
 	public Token nextToken() {
 		// skip white spaces
 		while (end < input.length()) {
-			if (!isWhitespace(input.charAt(end))) {
+			if (!Character.isWhitespace(input.charAt(end))) {
 				break;
 			}
 			end++;
@@ -56,7 +62,7 @@ public class Lexer {
 		previous = start;
 		start = end;
 
-		// find next operator
+		// find the next operator
 		while (end < input.length()) {
 			if (isDelimiter(input.charAt(end))) {
 				break;
@@ -68,46 +74,51 @@ public class Lexer {
 			return Token.Value;
 		}
 
-		Token match = null;
+		Token match = matchToken();
+		if (!match.text.isEmpty()) {
+			end += match.text.length();
+		} else {
+			end += 1;
+		}
+		return match;
+	}
+
+	// Matches the longest token from the input starting at the current position.
+	private Token matchToken() {
+		Token match = Token.Undefined;
 		for (Token token : TOKEN_VALUES) {
-			if (token.text == null || !input.startsWith(token.text, start)) {
-				// skip if token does not start with kind's text
+			if (!input.startsWith(token.text, start)) {
+				// text must start with token text
 				continue;
 			}
-			if (match == null || match.text.length() < token.text.length()) {
+			if (match.text.length() < token.text.length()) {
 				// use the longest match available
 				match = token;
 			}
 			if (match == token.getUnary() && match.text.equals(token.text)) {
-				// use the binary version
+				// always use the binary version
 				match = token;
 			}
 		}
-
-		if (match != null) {
-			end += match.text.length();
-			return match;
-		}
-
-		// separator, but not an operator
-		end += 1;
-		return Token.Undefined;
+		return match;
 	}
 
 	/**
-	 * Rollback the last read token
+	 * Put back the last read token to be read again by the next nextToken call.
+	 *
+	 * @throws Error if attempting to revert an unread token.
 	 */
 	public void backToken() throws Error {
-		if (previous < 0) {
+		if (previous == start) {
 			throw new Error("can not push back: ", Token.Undefined, this);
 		}
 		end = start;
 		start = previous;
-		previous = -1;
 	}
 
 	/**
 	 * Get the start position of the current token.
+	 *
 	 * @return position of the current token.
 	 */
 	public int getPosition() {
@@ -116,16 +127,19 @@ public class Lexer {
 
 	/**
 	 * Get the text of the current token.
+	 *
 	 * @return text of the current token.
 	 */
 	public String getText() {
 		return input.substring(start, end);
 	}
 
-	private static boolean isWhitespace(char chr) {
-		return Character.isWhitespace(chr);
-	}
-
+	/**
+	 * Determines if the given character is a delimiter based on the predefined set of delimiters.
+	 *
+	 * @param chr the character to evaluate
+	 * @return true if the character is a delimiter, false otherwise
+	 */
 	private boolean isDelimiter(char chr) {
 		return chr < delimiters.length && delimiters[chr];
 	}
@@ -136,6 +150,9 @@ public class Lexer {
 		return "Lexer(:" + start + ", '" + getText() + "'): " + input.substring(end);
 	}
 
+	/**
+	 * The Token enum represents various types of tokens, operators, and symbols that can be used during parsing.
+	 */
 	public enum Token {
 		Fun(15, false, "("),
 		Idx(15, false, "["),
@@ -185,10 +202,10 @@ public class Lexer {
 
 		Coma(1, false, ","),
 
-		Value(0, false, null),
+		Value(0, false, ""),
 		RParen(0, false, ")"),
 		RBracket(0, false, "]"),
-		Undefined(0, false, null);
+		Undefined(0, false, "");
 
 		Token(int precedence, boolean right2left, String text) {
 			this.precedence = precedence;
@@ -215,6 +232,11 @@ public class Lexer {
 		 */
 		public final String text;
 
+		/**
+		 * Determines if the current token can be used as a unary operator and returns the unary one if applicable.
+		 *
+		 * @return The unary form of the token if it exists, or null
+		 */
 		public Token getUnary() {
 			// allow some operators to behave as unary, the left branch will be null
 			switch (this) {
@@ -233,10 +255,20 @@ public class Lexer {
 			return null;
 		}
 
+		/**
+		 * Checks if the current token is a unary operator.
+		 *
+		 * @return true if the token is a unary operator; false otherwise
+		 */
 		public boolean isUnaryOperator() {
 			return this == getUnary();
 		}
 
+		/**
+		 * Checks if the current token is a binary operator.
+		 *
+		 * @return true if the token is a binary operator; false otherwise
+		 */
 		public boolean isBinaryOperator() {
 			// disallow some tokens to be used as (binary) operators
 			switch (this) {
