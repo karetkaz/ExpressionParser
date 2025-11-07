@@ -1,7 +1,7 @@
 /**
  * Represents a custom exception class for errors during parsing and evaluation.
  */
-public class Error extends Exception {
+public class Error extends RuntimeException {
 
 	/**
 	 * Constructs a new Error instance with specified details.

@@ -10,9 +10,8 @@ public class Parser {
 	 *
 	 * @param expression The input expression in string format to be parsed.
 	 * @return The root node of the resulting abstract syntax tree.
-	 * @throws Error If there are any parsing errors.
 	 */
-	public static Node parse(String expression) throws Error {
+	public static Node parse(String expression) {
 		Lexer lexer = new Lexer(expression);
 		Node node = binary(lexer, 0);
 		if (lexer.hasNext()) {
@@ -28,9 +27,8 @@ public class Parser {
 	 *
 	 * @param lexer The lexer instance that tokenizes the input stream for parsing.
 	 * @return A node representing the parsed unary expression or structure in the abstract syntax tree.
-	 * @throws Error If the syntax of the input fails to match the expected unary expression.
 	 */
-	private static Node unary(Lexer lexer) throws Error {
+	private static Node unary(Lexer lexer) {
 		Lexer.Token token = lexer.nextToken();
 		switch (token) {
 			case Value:
@@ -46,7 +44,8 @@ public class Parser {
 				lexer.backToken();
 				Node fun = new Node(token, position, token.text);
 				fun.right = binary(lexer, 0);
-				if (lexer.nextToken() != Lexer.Token.RParen) {
+				token = lexer.nextToken();
+				if (token != Lexer.Token.RParen) {
 					throw new Error("Right parenthesis expected, got", token, lexer);
 				}
 				return fun;
@@ -54,7 +53,8 @@ public class Parser {
 			case Idx:
 				Node idx = new Node(token, lexer.getPosition(), token.text);
 				idx.right = binary(lexer, 0);
-				if (lexer.nextToken() != Lexer.Token.RBracket) {
+				token = lexer.nextToken();
+				if (token != Lexer.Token.RBracket) {
 					throw new Error("Right bracket expected, got", token, lexer);
 				}
 				return idx;
@@ -79,9 +79,8 @@ public class Parser {
 	 * @param minPrecedence The minimum operator precedence allowed for this parsing.
 	 *                       Operators with precedence below this value will not be parsed.
 	 * @return A node representing the parsed binary expression or structure in the abstract syntax tree.
-	 * @throws Error If the syntax of the input fails to match the expected binary expression.
 	 */
-	private static Node binary(Lexer lexer, int minPrecedence) throws Error {
+	private static Node binary(Lexer lexer, int minPrecedence) {
 		Node root = unary(lexer);
 		while (lexer.hasNext()) {
 			Lexer.Token token = lexer.nextToken();

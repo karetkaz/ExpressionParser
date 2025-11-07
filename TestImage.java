@@ -1,4 +1,5 @@
 import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.ToDoubleFunction;
@@ -6,7 +7,7 @@ import java.util.function.ToDoubleFunction;
 class TestImage extends Evaluator {
 	private static final boolean ENABLE_OPTIMIZATION = true;
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws IOException {
 		int size = 512;
 
 		String equationYinYang = "h = x * x + y * y, h > 1 || ("
@@ -106,7 +107,7 @@ class TestImage extends Evaluator {
 	}
 
 	@Override
-	public double onValue(String value) throws Error {
+	public double onValue(String value) {
 		if (ENABLE_OPTIMIZATION) {
 			throw new Error("Not optimized out value: " + value);
 		}
@@ -118,12 +119,12 @@ class TestImage extends Evaluator {
 	}
 
 	@Override
-	protected double onArray(String array, int subscript) throws Error {
+	protected double onArray(String array, int subscript) {
 		throw new Error("Arrays are not supported");
 	}
 
 	@Override
-	protected double onFunction(String function, double[] arguments) throws Error {
+	protected double onFunction(String function, double[] arguments) {
 		if (ENABLE_OPTIMIZATION) {
 			throw new Error("Not optimized out function: " + function);
 		}
@@ -161,15 +162,16 @@ class TestImage extends Evaluator {
 	}
 
 	@Override
-	public double evaluate(Parser.Node node) throws Error {
+	public double evaluate(Parser.Node node) {
 		if (node instanceof OptimizedNode) {
 			return ((OptimizedNode) node).getValue();
 		}
 
 		switch (node.getToken()) {
 			case Set:
+				require(!ENABLE_OPTIMIZATION, "Not optimized out assignment");
 				// set or create a new variable and update its value
-				return getVarOrPut(node.getLeft()).setValue(evaluate(node.getRight()));
+				return getVarOrPut(node.getLeft().getText()).setValue(evaluate(node.getRight()));
 
 			case Coma:
 				// enable a chain of expressions, returning the value of the last one
@@ -181,7 +183,7 @@ class TestImage extends Evaluator {
 	}
 
 	@Override
-	protected Parser.Node optimize(Parser.Node node) throws Error {
+	protected Parser.Node optimize(Parser.Node node) {
 		if (node == null) {
 			return null;
 		}
@@ -202,37 +204,28 @@ class TestImage extends Evaluator {
 
 			case Fun:
 				if (node.getLeft() == null) {
-					// replace with subtree: (3 + 7)
+					// replace node with subtree: (3 + 7)
 					return optimize(node.getRight());
 				}
-				// replace with function: min(5)
+				// replace node with function: min(5)
 				require(node.getLeft().getToken() == Lexer.Token.Value, "must be a value");
-				return new FunNode(this, functions.get(node.getLeft().getText()), optimize(node.getRight()));
+				return new FunNode(functions.get(node.getLeft().getText()), optimize(node.getRight()));
 
 			case Set:
 				// replace or create variable: x = 5
 				require(node.getLeft().getToken() == Lexer.Token.Value, "must be a value");
-				return new SetNode(this, getVarOrPut(node.getLeft().getText()), optimize(node.getRight()));
+				return new SetNode(getVarOrPut(node.getLeft().getText()), optimize(node.getRight()));
 		}
 
 		return super.optimize(node);
-	}
-
-
-	private VarNode getVarOrPut(Parser.Node node) {
-		if (node instanceof VarNode) {
-			return (VarNode) node;
-		}
-		return getVarOrPut(node.getText());
 	}
 
 	private VarNode getVarOrPut(String name) {
 		return variables.computeIfAbsent(name, VarNode::new);
 	}
 
-
 	interface OptimizedNode {
-		double getValue() throws Error;
+		double getValue();
 	}
 
 	// node representing a parsed value or variable, like: `3.1415...`
@@ -264,40 +257,36 @@ class TestImage extends Evaluator {
 	}
 
 	// node representing a variable update, like: `x = 3 * y`
-	private static class SetNode extends Parser.Node implements OptimizedNode {
-		private final TestImage evaluator;
+	private class SetNode extends Parser.Node implements OptimizedNode {
 		private final VarNode var;
 
-		protected SetNode(TestImage evaluator, VarNode var, Parser.Node value) {
+		protected SetNode(VarNode var, Parser.Node value) {
 			super(Lexer.Token.Set, -1, "<optimized variable set node>");
-			this.evaluator = evaluator;
 			this.right = value;
 			this.var = var;
 		}
 
 		@Override
-		public double getValue() throws Error {
-			return var.setValue(evaluator.evaluate(this.right));
+		public double getValue() {
+			return var.setValue(TestImage.this.evaluate(this.right));
 		}
 	}
 
 	// node representing a function call, like: `smoothstep(1, h, .98)`
-	private static class FunNode extends Parser.Node implements OptimizedNode {
+	private class FunNode extends Parser.Node implements OptimizedNode {
 		private final double[] arguments;
-		private final TestImage evaluator;
 		private final ToDoubleFunction<double[]> fun;
 
-		protected FunNode(TestImage evaluator, ToDoubleFunction<double[]> fun, Parser.Node args) {
+		protected FunNode(ToDoubleFunction<double[]> fun, Parser.Node args) {
 			super(Lexer.Token.Fun, -1, "<optimized function call node>");
 			this.arguments = new double[Evaluator.countArgs(args)];
-			this.evaluator = evaluator;
 			this.right = args;
 			this.fun = fun;
 		}
 
 		@Override
-		public double getValue() throws Error {
-			evaluator.evaluateArguments(arguments, 0, this.right);
+		public double getValue() {
+			TestImage.this.evaluateArguments(arguments, 0, this.right);
 			return fun.applyAsDouble(arguments);
 		}
 	}

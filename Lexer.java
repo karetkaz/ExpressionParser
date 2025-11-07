@@ -108,10 +108,8 @@ public class Lexer {
 
 	/**
 	 * Put back the last read token to be read again by the next nextToken call.
-	 *
-	 * @throws Error if attempting to revert an unread token.
 	 */
-	public void backToken() throws Error {
+	public void backToken() {
 		if (previous == start) {
 			throw new Error("can not push back: ", Token.Undefined, this);
 		}
@@ -281,6 +279,7 @@ public class Lexer {
 				case Not:
 				case Value:
 				case RParen:
+				case RBracket:
 				case Undefined:
 					return false;
 			}

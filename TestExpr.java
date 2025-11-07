@@ -12,7 +12,7 @@ public class TestExpr {
 	private static final double w = Math.random() * -100;
 	private static final double[] vec = {x, y, z, w};
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) {
 		testValues();
 		testBitwise();
 		testArithmetic();
@@ -23,6 +23,8 @@ public class TestExpr {
 		testPrimary();
 
 		// test recursive parser
+		assertEquals(x < 0 ? EvaluatorMath.sin(x) : EvaluatorMath.cos(x), "x < 0 ? sin(x) : cos(x)", epsilon, false, null);
+
 		assertEquals(3, "0?2:3", epsilon, false, "0 3 ?");
 		assertEquals(2, "1?2:3", epsilon, false, "1 2 ?");
 		assertEquals(x < 0 ? -x : x, "x < 0 ? -x : x", epsilon, false, "x 0 < x ?");
@@ -69,7 +71,7 @@ public class TestExpr {
 		assertError("(([([])]))", "Unary operator expected: Token.RBracket(`]`), at position: 5");
 	}
 
-	public static void testValues() throws Error {
+	public static void testValues() {
 		assertEquals(4, "4", epsilon, false, "4");
 		assertEquals(4, "4.", epsilon, false, "4.");
 		assertEquals(4, "4.000", epsilon, false, "4.000");
@@ -82,7 +84,7 @@ public class TestExpr {
 		assertEquals(Math.PI / 4, "pi / 4", epsilon, false, "pi 4 /");
 	}
 
-	public static void testBitwise() throws Error {
+	public static void testBitwise() {
 		assertEquals(~4, "~4", epsilon, false, "4 ~");
 
 		assertEquals(27 & 89, "27 & 89", epsilon, false, "27 89 &");
@@ -94,7 +96,7 @@ public class TestExpr {
 		assertEquals(3101, "198475 >>> 6", epsilon, false, "198475 6 >>>");
 	}
 
-	public static void testArithmetic() throws Error {
+	public static void testArithmetic() {
 		assertEquals(-4, "-4", epsilon, false, "4 -");
 
 		assertEquals(27. + 89, "27 + 89", epsilon, false, "27 89 +");
@@ -109,7 +111,7 @@ public class TestExpr {
 		assertEquals((1. + 2) * 3, "(1 + 2) * 3", epsilon, false, "1 2 + 3 *");
 	}
 
-	public static void testEquality() throws Error {
+	public static void testEquality() {
 		assertEquals(1, "1 == 1", epsilon, false, "1 1 ==");
 		assertEquals(0, "1 <> 1", epsilon, false, "1 1 <>");
 		assertEquals(0, "1 == 0", epsilon, false, "1 0 ==");
@@ -135,7 +137,7 @@ public class TestExpr {
 		assertEquals(1, "(.1 + .2) + .3 <> .1 + (.2 + .3)", epsilon, false, ".1 .2 + .3 + .1 .2 .3 + + <>");
 	}
 
-	public static void testPrecedence() throws Error {
+	public static void testPrecedence() {
 		// '-' associates right to left
 		assertEquals(1, "----1", epsilon, true, "(((1 -) -) -) -");
 		assertEquals(1, "++++1", epsilon, true, "(((1 +) +) +) +");
@@ -169,7 +171,7 @@ public class TestExpr {
 		assertEquals(0, "1 < 2 && 2 < 1", epsilon, true, "(1 2 <) (2 1 <) &&");
 	}
 
-	public static void testShortCircuit() throws Error {
+	public static void testShortCircuit() {
 		assertEquals(2, "1 && 2", epsilon, false, "1 2 &&");
 		assertEquals(0, "0 && 2", epsilon, false, "0 &&");
 		assertEquals(0, "1 && 0", epsilon, false, "1 0 &&");
@@ -199,7 +201,7 @@ public class TestExpr {
 		assertEquals(1, "1 < 2 || 2 < 3 || 3 < 4", epsilon, false, "1 2 < || ||");
 	}
 
-	public static void testPrimary() throws Error {
+	public static void testPrimary() {
 		assertEquals(0, "!nan", epsilon, false, "nan !"); // todo: js: !NaN === true
 		assertEquals(0, "!inf", epsilon, false, "inf !");
 		assertEquals(0, "!pi", epsilon, false, "pi !");
@@ -249,7 +251,7 @@ public class TestExpr {
 		assertEquals(w, "min(vec)", epsilon, false, "vec min(#1)");
 	}
 
-	public static void testPowers() throws Error {
+	public static void testPowers() {
 		if (!Lexer.Token.Pow.right2left) {
 			// Pow should be right to left associative, with higher precedence than unary operators:
 			// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Exponentiation
@@ -276,7 +278,7 @@ public class TestExpr {
 		assertEquals(8, "log(256, 2)", epsilon, false, "256 2 log(#2)");
 	}
 
-	private static void assertError(String expression, String message) throws Error {
+	private static void assertError(String expression, String message) {
 		try {
 			assertEquals(Double.NaN, expression, 0, false, null);
 		} catch (Exception e) {
@@ -288,7 +290,7 @@ public class TestExpr {
 		throw new Error("Error expected");
 	}
 
-	private static void assertEquals(double expected, String expression, double epsilon, boolean group, String rpn) throws Error {
+	private static void assertEquals(double expected, String expression, double epsilon, boolean group, String rpn) {
 		Parser.Node root = Parser.parse(expression);
 		// Evaluator which appends to the out buffer the evaluated values (in reverse polish notation)
 		// also allows evaluation of invalid structures like: `[]`, `()`, `[x]`, `x[]`, ...
@@ -297,7 +299,7 @@ public class TestExpr {
 			final StringBuilder rpn = new StringBuilder();
 
 			@Override
-			protected double onValue(String value) throws Error {
+			protected double onValue(String value) {
 				switch (value) {
 					case "x":
 						return x;
@@ -315,7 +317,7 @@ public class TestExpr {
 			}
 
 			@Override
-			protected double onArray(String array, int subscript) throws Error {
+			protected double onArray(String array, int subscript) {
 				// allow `vec` to be indexed with numbers: vec[0], vec[1], vec[2], vec[3]
 				if ("vec".equals(array)) {
 					return vec[subscript];
@@ -324,7 +326,7 @@ public class TestExpr {
 			}
 
 			@Override
-			protected double onArray(String array, Parser.Node property) throws Error {
+			protected double onArray(String array, Parser.Node property) {
 				// allow `vec` to be indexed with x, y, z, w: vec[x], vec[y], vec[z], vec[w]
 				if ("vec".equals(array)) {
 					switch (property.getText()) {
@@ -349,7 +351,7 @@ public class TestExpr {
 			}
 
 			@Override
-			protected double onFunction(String function, Parser.Node arguments) throws Error {
+			protected double onFunction(String function, Parser.Node arguments) {
 				// allow `vec` to be passed to functions as an array: min(vec), max(vec), ...
 				if (arguments != null && arguments.getText().equals("vec")) {
 					rpn.append(arguments.getText()).append(" ");
@@ -359,7 +361,7 @@ public class TestExpr {
 			}
 
 			@Override
-			public double evaluate(Parser.Node node) throws Error {
+			public double evaluate(Parser.Node node) {
 				if (node.getToken() == Lexer.Token.Fun && node.getLeft() == null) {
 					return super.evaluate(node);
 				}
@@ -418,7 +420,7 @@ public class TestExpr {
 		System.out.println(value + " == expr: `" + expression + "`, eval: `" + evaluation + "`");
 	}
 
-	private static boolean compare(Parser.Node a, Parser.Node b) throws Error {
+	private static boolean compare(Parser.Node a, Parser.Node b) {
 		if (a == b) {
 			return true;
 		}
@@ -450,7 +452,7 @@ public class TestExpr {
 	 * @return Abstract syntax tree for the input.
 	 * @see <a href="https://en.wikipedia.org/wiki/Shunting_yard_algorithm">Algorithm</a>
 	 */
-	private static Parser.Node parseIterative(String expression) throws Error {
+	private static Parser.Node parseIterative(String expression) {
 		// the algorithm needs to save the precedence in the node
 		class Node extends Parser.Node {
 			public final int precedence;
@@ -598,7 +600,7 @@ public class TestExpr {
 		protected static final double e = Math.E;
 
 		@Override
-		protected double onValue(String value) throws Error {
+		protected double onValue(String value) {
 			switch (value) {
 				case "nan":
 					return nan;
@@ -616,12 +618,12 @@ public class TestExpr {
 		}
 
 		@Override
-		protected double onArray(String array, int subscript) throws Error {
+		protected double onArray(String array, int subscript) {
 			throw new Error("Invalid subscript: " + array + "[" + subscript + "]");
 		}
 
 		@Override
-		protected double onFunction(String function, double[] arguments) throws Error {
+		protected double onFunction(String function, double[] arguments) {
 			switch (function) {
 				case "min":
 					require(arguments.length >= 1, "At least one argument expected");

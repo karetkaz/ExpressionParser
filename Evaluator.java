@@ -14,7 +14,7 @@ public abstract class Evaluator {
 	 * @param value the variable or number represented as text.
 	 * @return value to be used for this token.
 	 */
-	protected abstract double onValue(String value) throws Error;
+	protected abstract double onValue(String value);
 
 	/**
 	 * Invoked on nodes parsed as index operator(`array[subscript]`).
@@ -23,7 +23,7 @@ public abstract class Evaluator {
 	 * @param subscript the subscript to be used.
 	 * @return value of the expression.
 	 */
-	protected abstract double onArray(String array, int subscript) throws Error;
+	protected abstract double onArray(String array, int subscript);
 
 	/**
 	 * Invoked on nodes parsed as function call operator(`function(...arguments)`).
@@ -32,7 +32,7 @@ public abstract class Evaluator {
 	 * @param arguments arguments of the invocation.
 	 * @return value of the expression.
 	 */
-	protected abstract double onFunction(String function, double[] arguments) throws Error;
+	protected abstract double onFunction(String function, double[] arguments);
 
 	/**
 	 * Convenience method to evaluate constructs where the subscript might be an identifier,
@@ -42,7 +42,7 @@ public abstract class Evaluator {
 	 * @param subscript the subscript to be used.
 	 * @return value of the expression.
 	 */
-	protected double onArray(String array, Parser.Node subscript) throws Error {
+	protected double onArray(String array, Parser.Node subscript) {
 		double value = evaluate(subscript);
 		int index = (int) value;
 		if (value != index) {
@@ -59,7 +59,7 @@ public abstract class Evaluator {
 	 * @param arguments arguments of the invocation.
 	 * @return value of the expression.
 	 */
-	protected double onFunction(String function, Parser.Node arguments) throws Error {
+	protected double onFunction(String function, Parser.Node arguments) {
 		if (arguments == null) {
 			return onFunction(function, EMPTY_ARGS);
 		}
@@ -69,7 +69,7 @@ public abstract class Evaluator {
 		return onFunction(function, args);
 	}
 
-	protected int evaluateArguments(double[] args, int pos, Parser.Node arguments) throws Error {
+	protected int evaluateArguments(double[] args, int pos, Parser.Node arguments) {
 		if (arguments.token != Lexer.Token.Coma) {
 			args[pos] = evaluate(arguments);
 			return pos;
@@ -90,7 +90,7 @@ public abstract class Evaluator {
 	 * @param node      root of the syntax tree.
 	 * @return value of the expression.
 	 */
-	public double evaluate(Parser.Node node) throws Error {
+	public double evaluate(Parser.Node node) {
 		double left, right;
 		switch (node.token) {
 			case Value:
@@ -289,7 +289,7 @@ public abstract class Evaluator {
 	 * Optimize the given tree by replacing function, variable and value nodes with custom nodes so
 	 * that while evaluating the expression, variable lookup and value parsing are already done.
 	 */
-	protected Parser.Node optimize(Parser.Node node) throws Error {
+	protected Parser.Node optimize(Parser.Node node) {
 		if (node != null) {
 			node.left = optimize(node.left);
 			node.right = optimize(node.right);
@@ -312,7 +312,7 @@ public abstract class Evaluator {
 		return n;
 	}
 
-	public static void require(boolean condition, String message) throws Error {
+	public static void require(boolean condition, String message) {
 		if (!condition) throw new Error(message);
 	}
 }
