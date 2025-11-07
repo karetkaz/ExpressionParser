@@ -64,21 +64,12 @@ public abstract class Evaluator {
 			return onFunction(function, EMPTY_ARGS);
 		}
 
-		int n = 1;
-		for (Parser.Node node = arguments; node.token == Lexer.Token.Coma; n += 1) {
-			if (Lexer.Token.Coma.right2left) {
-				node = node.right;
-			} else {
-				node = node.left;
-			}
-		}
-
-		double[] args = new double[n];
+		double[] args = new double[countArgs(arguments)];
 		evaluateArguments(args, 0, arguments);
 		return onFunction(function, args);
 	}
 
-	private int evaluateArguments(double[] args, int pos, Parser.Node arguments) throws Error {
+	protected int evaluateArguments(double[] args, int pos, Parser.Node arguments) throws Error {
 		if (arguments.token != Lexer.Token.Coma) {
 			args[pos] = evaluate(arguments);
 			return pos;
@@ -292,6 +283,33 @@ public abstract class Evaluator {
 
 		}
 		throw new Error("Invalid operation", node);
+	}
+
+	/**
+	 * Optimize the given tree by replacing function, variable and value nodes with custom nodes so
+	 * that while evaluating the expression, variable lookup and value parsing are already done.
+	 */
+	protected Parser.Node optimize(Parser.Node node) throws Error {
+		if (node != null) {
+			node.left = optimize(node.left);
+			node.right = optimize(node.right);
+		}
+		return node;
+	}
+
+	protected static int countArgs(Parser.Node arguments) {
+		if (arguments == null) {
+			return 0;
+		}
+		int n = 1;
+		for (Parser.Node node = arguments; node.token == Lexer.Token.Coma; n += 1) {
+			if (Lexer.Token.Coma.right2left) {
+				node = node.right;
+			} else {
+				node = node.left;
+			}
+		}
+		return n;
 	}
 
 	public static void require(boolean condition, String message) throws Error {

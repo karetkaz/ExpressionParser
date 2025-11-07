@@ -13,19 +13,8 @@ public class Parser {
 	 * @throws Error If there are any parsing errors.
 	 */
 	public static Node parse(String expression) throws Error {
-		return parse(new Lexer(expression));
-	}
-
-	/**
-	 * Parses the input provided by the lexer and generates an abstract syntax tree.
-	 * The method ensures that the entirety of the input has been consumed during parsing.
-	 *
-	 * @param lexer The lexer instance that tokenizes the input stream for parsing.
-	 * @return The root node of the resulting abstract syntax tree.
-	 * @throws Error If there are any parsing errors.
-	 */
-	public static Node parse(Lexer lexer) throws Error {
-		Node node = parseBinary(lexer, 0);
+		Lexer lexer = new Lexer(expression);
+		Node node = binary(lexer, 0);
 		if (lexer.hasNext()) {
 			throw new Error("End of input expected, got", lexer.nextToken(), lexer);
 		}
@@ -41,7 +30,7 @@ public class Parser {
 	 * @return A node representing the parsed unary expression or structure in the abstract syntax tree.
 	 * @throws Error If the syntax of the input fails to match the expected unary expression.
 	 */
-	private static Node parseUnary(Lexer lexer) throws Error {
+	private static Node unary(Lexer lexer) throws Error {
 		Lexer.Token token = lexer.nextToken();
 		switch (token) {
 			case Value:
@@ -56,7 +45,7 @@ public class Parser {
 
 				lexer.backToken();
 				Node fun = new Node(token, position, token.text);
-				fun.right = parseBinary(lexer, 0);
+				fun.right = binary(lexer, 0);
 				if (lexer.nextToken() != Lexer.Token.RParen) {
 					throw new Error("Right parenthesis expected, got", token, lexer);
 				}
@@ -64,7 +53,7 @@ public class Parser {
 
 			case Idx:
 				Node idx = new Node(token, lexer.getPosition(), token.text);
-				idx.right = parseBinary(lexer, 0);
+				idx.right = binary(lexer, 0);
 				if (lexer.nextToken() != Lexer.Token.RBracket) {
 					throw new Error("Right bracket expected, got", token, lexer);
 				}
@@ -76,7 +65,7 @@ public class Parser {
 		}
 
 		Node node = new Node(token.getUnary(), lexer.getPosition(), token.text);
-		node.right = parseUnary(lexer);
+		node.right = unary(lexer);
 		return node;
 	}
 
@@ -92,8 +81,8 @@ public class Parser {
 	 * @return A node representing the parsed binary expression or structure in the abstract syntax tree.
 	 * @throws Error If the syntax of the input fails to match the expected binary expression.
 	 */
-	private static Node parseBinary(Lexer lexer, int minPrecedence) throws Error {
-		Node root = parseUnary(lexer);
+	private static Node binary(Lexer lexer, int minPrecedence) throws Error {
+		Node root = unary(lexer);
 		while (lexer.hasNext()) {
 			Lexer.Token token = lexer.nextToken();
 			switch (token) {
@@ -107,7 +96,7 @@ public class Parser {
 				case Fun:
 				case Idx:
 					lexer.backToken();
-					Node node = parseUnary(lexer);
+					Node node = unary(lexer);
 					node.left = root;
 					root = node;
 					continue;
@@ -135,7 +124,7 @@ public class Parser {
 			}
 
 			Node node = new Node(token, lexer.getPosition(), token.text);
-			node.right = parseBinary(lexer, token.precedence);
+			node.right = binary(lexer, token.precedence);
 			node.left = root;
 			root = node;
 		}
@@ -154,7 +143,7 @@ public class Parser {
 		protected final Lexer.Token token;
 
 		/**
-		 * Position of token in the input.
+		 * Position of the token in the input.
 		 * Used mainly for error reporting.
 		 */
 		private final int position;

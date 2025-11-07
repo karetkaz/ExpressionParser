@@ -1,3 +1,7 @@
+import java.util.EmptyStackException;
+import java.util.Stack;
+import java.util.Vector;
+
 public class TestExpr {
 	private static final double epsilon = 0;
 	private static final double epsilonTrig = 1e-15;
@@ -28,6 +32,11 @@ public class TestExpr {
 		assertEquals(x < y ? y - x : x - y, "x < y ? y - x : x - y", epsilon, false, "x y < y x - ?");
 		assertEquals(x < y ? y - x * w : w * x - y, "x < y ? y - x * w : w * x - y", epsilon, false, "x y < y x w * - ?");
 		assertEquals(x, "(x)", epsilon, false, "x");
+
+		assertError("       ", "Unary operator expected: Token.Undefined(``), at position: 7");
+		assertEquals(1, "    1   ", epsilon, false, "1");
+		assertEquals(2, "    1    +     \t1   ", epsilon, false, "1 1 +");
+		assertError("    1    +     \t   ", "Unary operator expected: Token.Undefined(``), at position: 19");
 
 		assertError("3x", "Invalid value: Token.Value(`3x`), at position: 0");
 		assertError("3.1415.3", "Invalid value: Token.Value(`3.1415.3`), at position: 0");
@@ -349,22 +358,6 @@ public class TestExpr {
 				return super.onFunction(function, arguments);
 			}
 
-			int countArgs(Parser.Node node) {
-				if (node == null) {
-					return 0;
-				}
-				int count = 1;
-				while (node.getToken() == Lexer.Token.Coma) {
-					if (Lexer.Token.Coma.right2left) {
-						node = node.getRight();
-					} else {
-						node = node.getLeft();
-					}
-					count += 1;
-				}
-				return count;
-			}
-
 			@Override
 			public double evaluate(Parser.Node node) throws Error {
 				if (node.getToken() == Lexer.Token.Fun && node.getLeft() == null) {
@@ -419,7 +412,7 @@ public class TestExpr {
 		if (rpn != null && !rpn.contentEquals(evaluation)) {
 			throw new Error("Expected value: `" + rpn + "`, got: `" + evaluation + "`");
 		}
-		if (!compare(root, ParserIterative.parse(new Lexer(expression)))) {
+		if (!compare(root, parseIterative(expression))) {
 			throw new Error("Expected same tree for recursive and iterative parsing");
 		}
 		System.out.println(value + " == expr: `" + expression + "`, eval: `" + evaluation + "`");
@@ -449,6 +442,153 @@ public class TestExpr {
 			throw new Error("Position does not match");
 		}
 		return true;
+	}
+
+	/**
+	 * Tokenize the input expression and build its abstract syntax tree.
+	 *
+	 * @return Abstract syntax tree for the input.
+	 * @see <a href="https://en.wikipedia.org/wiki/Shunting_yard_algorithm">Algorithm</a>
+	 */
+	private static Parser.Node parseIterative(String expression) throws Error {
+		// the algorithm needs to save the precedence in the node
+		class Node extends Parser.Node {
+			public final int precedence;
+
+			public Node(Lexer.Token token, int precedence, Lexer lexer) {
+				super(token, lexer.getPosition(), lexer.getText());
+				this.precedence = precedence;
+			}
+
+			public boolean precedes(int level) {
+				if (this.token.right2left) {
+					return this.precedence > level;
+				}
+				return this.precedence >= level;
+			}
+
+			public void setLeft(Parser.Node left) {
+				this.left = left;
+			}
+
+			public void setRight(Parser.Node right) {
+				this.right = right;
+			}
+		}
+
+		Lexer lexer = new Lexer(expression);
+		Stack<Node> operators = new Stack<>();
+		Stack<Lexer.Token> parens = new Stack<>();
+		Vector<Node> postfix = new Vector<>();
+		boolean unary = true;
+
+		Lexer.Token previousToken = null;
+		while (lexer.hasNext()) {
+			Lexer.Token token = lexer.nextToken();
+			if (unary && token.getUnary() != null) {
+				// switch to unary token in unary mode to use correct precedence
+				token = token.getUnary();
+			}
+
+			int precedence = parens.size() * Lexer.Token.Fun.precedence + token.precedence;
+			final Lexer.Token previous = previousToken;
+			previousToken = token;
+			switch (token) {
+				case Undefined:
+					if (!lexer.hasNext()) {
+						continue;
+					}
+					break;
+
+				case Value:
+					if (!unary) {
+						throw new Error("Unexpected token", token, lexer);
+					}
+					postfix.add(new Node(token, precedence, lexer));
+					unary = false;
+					continue;
+
+				case RParen:
+					if (parens.pop() != Lexer.Token.Fun || (unary && previous != Lexer.Token.Fun)) {
+						throw new Error("Unexpected token", token, lexer);
+					}
+					if (unary) {
+						// case of: `method()`
+						postfix.add(null);
+						unary = false;
+					}
+					continue;
+
+				case RBracket:
+					if (parens.pop() != Lexer.Token.Idx || (unary && previous != Lexer.Token.Idx)) {
+						throw new Error("Unexpected token", token, lexer);
+					}
+					if (unary) {
+						// case of: `array[]`
+						postfix.add(null);
+						unary = false;
+					}
+					continue;
+
+				case Fun:
+				case Idx:
+					parens.push(token);
+					if (unary) {
+						// case of: `(x + 2)` or `[x + 1]`
+						postfix.add(null);
+						unary = false;
+					}
+					break;
+			}
+
+			if (!token.isBinaryOperator() && !token.isUnaryOperator()) {
+				throw new Error("Operator expected", token, lexer);
+			}
+
+			if (unary != token.isUnaryOperator()) {
+				throw new Error((unary ? "Unary" : "Binary") + " operator expected", token, lexer);
+			}
+
+			while (!operators.isEmpty() && operators.peek().precedes(precedence)) {
+				postfix.add(operators.pop());
+			}
+			operators.push(new Node(token, precedence, lexer));
+			unary = true;
+		}
+
+		if (!parens.isEmpty()) {
+			throw new Error("Missing: " + parens.peek());
+		}
+
+		// flush operators left on stack
+		while (!operators.isEmpty()) {
+			postfix.add(operators.pop());
+		}
+
+		// build the syntax tree.
+		for (Node node : postfix) {
+			try {
+				if (node != null) {
+					if (node.getToken().isBinaryOperator()) {
+						node.setRight(operators.pop());
+						node.setLeft(operators.pop());
+					} else if (node.getToken().isUnaryOperator()) {
+						node.setRight(operators.pop());
+						node.setLeft(null);
+					}
+				}
+				operators.push(node);
+			} catch (EmptyStackException e) {
+				if (node == null) {
+					throw new Error("Invalid expression");
+				}
+				throw new Error("Syntax error near", node);
+			}
+		}
+		if (operators.size() != 1) {
+			throw new Error("Invalid expression");
+		}
+		return operators.pop();
 	}
 
 	static class EvaluatorMath extends Evaluator {

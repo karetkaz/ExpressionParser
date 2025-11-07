@@ -23,7 +23,7 @@ public class Lexer {
 			throw new IllegalArgumentException("Input cannot be null");
 		}
 		this.input = input;
-		this.delimiters = new boolean[256];
+		this.delimiters = new boolean[128];
 
 		// use whitespace and operator's first character as separator
 		for (int i = 0; i < delimiters.length; i++) {
@@ -70,21 +70,17 @@ public class Lexer {
 			end++;
 		}
 
-		if (start < end) {
+		if (end > start) {
+			// non-delimiter chars were read
 			return Token.Value;
 		}
 
-		Token match = matchToken();
-		if (!match.text.isEmpty()) {
-			end += match.text.length();
-		} else {
-			end += 1;
+		if (end >= input.length()) {
+			// skip whitespaces at the end of the input
+			return Token.Undefined;
 		}
-		return match;
-	}
 
-	// Matches the longest token from the input starting at the current position.
-	private Token matchToken() {
+		// match the longest token from the input, starting at the current position
 		Token match = Token.Undefined;
 		for (Token token : TOKEN_VALUES) {
 			if (!input.startsWith(token.text, start)) {
@@ -100,6 +96,13 @@ public class Lexer {
 				match = token;
 			}
 		}
+
+		if (!match.text.isEmpty()) {
+			end += match.text.length();
+		} else {
+			end += 1;
+		}
+
 		return match;
 	}
 
